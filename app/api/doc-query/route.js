@@ -242,7 +242,8 @@ export async function POST(request) {
     return NextResponse.json({
       response: response.text,
       citations: relevantChunks,
-      summary: summary.text
+      summary: summary.text,
+      fileUrl: relevantChunks[0]?.metadata?.fileUrl // Add this line
     });
 
   } catch (error) {
