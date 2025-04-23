@@ -1,15 +1,13 @@
 @import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 :root {
   --background: #ffffff;
   --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: Arial, Helvetica, sans-serif;
+  --font-mono: monospace;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -22,5 +20,51 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
 }
+
+/* Custom theme classes */
+@layer utilities {
+  .bg-background {
+    background-color: var(--background);
+  }
+  
+  .text-foreground {
+    color: var(--foreground);
+  }
+  
+  .bg-indigo-900\/60 {
+    background-color: rgba(49, 46, 129, 0.6);
+  }
+  
+  .dark .bg-indigo-900\/60 {
+    background-color: rgba(49, 46, 129, 0.8);
+  }
+}
+
+/* Prevent any content from showing through modal */
+.modal-open {
+  overflow: hidden !important;
+  position: fixed !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Ensure chat content stays behind modal */
+.chat-container {
+  position: relative;
+  z-index: 1;
+}
+
+/* Reset any transforms that might create stacking contexts */
+.message-container {
+  transform: none !important;
+}
+
+
+
+/* For legal citations */
+/* .legal-citation {
+  page-break-inside: avoid;
+  break-inside: avoid;
+} */
