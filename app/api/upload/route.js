@@ -248,7 +248,10 @@ const localBlobStorage = async (fileName, file, options) => {
 const getStorageHandler = async () => {
   if (process.env.VERCEL_ENV === 'production') {
     const { put } = await import('@vercel/blob');
-    return put;
+    return (fileName, file, options) => put(fileName, file, {
+      ...options,
+      token: process.env.BLOB_READ_WRITE_TOKEN
+    });
   }
   return localBlobStorage;
 };

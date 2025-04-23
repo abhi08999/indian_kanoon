@@ -46,7 +46,7 @@ export default function DocumentChatInput({
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isUploading}
                 whileTap={{ scale: 0.95 }}
-                className={`p-3 rounded-full m-1 ${darkMode 
+                className={`cursor-pointer p-3 rounded-full m-1 ${darkMode 
                   ? 'bg-gray-700 hover:bg-gray-600 text-white' 
                   : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
                 } ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
