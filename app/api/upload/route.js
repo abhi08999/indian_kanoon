@@ -186,7 +186,7 @@
 
 // app/api/upload/route.js
 import { NextResponse } from "next/server";
-import { put } from '@vercel/blob';
+import { put, get } from '@vercel/blob'; // Added get
 import { v4 as uuidv4 } from 'uuid';
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
@@ -196,32 +196,48 @@ import fs from 'fs/promises';
 import path from 'path';
 import { createHash } from 'crypto';
 
-// Initialize Pinecone client
 const pinecone = new Pinecone({ 
   apiKey: process.env.PINECONE_API_KEY 
 });
 
 async function storeFile(fileName, file) {
-  // Use local storage if Blob isn't configured
   if (!process.env.BLOB_READ_WRITE_TOKEN || process.env.NODE_ENV === 'development') {
     const uploadsDir = path.join(process.cwd(), 'uploads');
     await fs.mkdir(uploadsDir, { recursive: true });
     const filePath = path.join(uploadsDir, fileName);
     await fs.writeFile(filePath, Buffer.from(await file.arrayBuffer()));
     return { 
-      url: path.join(uploadsDir, fileName) // Return direct filesystem path
+      url: path.join(uploadsDir, fileName),
+      downloadUrl: path.join(uploadsDir, fileName)
     };
   }
 
-  // Use Vercel Blob in production
   try {
-    return await put(fileName, file, {
+    const blob = await put(fileName, file, {
       access: 'public',
       token: process.env.BLOB_READ_WRITE_TOKEN
     });
+    return {
+      ...blob,
+      downloadUrl: blob.url
+    };
   } catch (error) {
     console.error('Blob upload failed:', error);
-    throw new Error('File storage service unavailable');
+    throw error;
+  }
+}
+
+async function loadPdfContent(url) {
+  if (process.env.NODE_ENV === 'production') {
+    // For production: Download the blob content
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Failed to download file: ${response.status}`);
+    const blob = await response.blob();
+    return new PDFLoader(blob).load();
+  } else {
+    // For local development
+    const filePath = url.startsWith('file://') ? url.slice(7) : url;
+    return new PDFLoader(filePath).load();
   }
 }
 
@@ -232,7 +248,7 @@ async function processDocument(file, fileId) {
 
   const index = pinecone.Index(process.env.PINECONE_INDEX);
 
-  // Delete existing versions using proper Pinecone syntax
+  // Delete existing versions
   try {
     const existing = await index.query({
       vector: Array(1536).fill(0),
@@ -242,7 +258,6 @@ async function processDocument(file, fileId) {
     });
     
     if (existing.matches?.length) {
-      // Proper deletion syntax for Pinecone
       await index.deleteMany(existing.matches.map(v => v.id));
     }
   } catch (error) {
@@ -252,19 +267,14 @@ async function processDocument(file, fileId) {
   // Store file
   const blob = await storeFile(`${fileId}.pdf`, file);
 
-  // Process document with proper file path handling
-  let loader;
-  if (process.env.NODE_ENV === 'production') {
-    loader = new PDFLoader(blob.url);
-  } else {
-    // Remove file:// prefix for local development
-    const filePath = blob.url.startsWith('file://') 
-      ? blob.url.slice(7) 
-      : blob.url;
-    loader = new PDFLoader(filePath);
+  // Process document
+  let docs;
+  try {
+    docs = await loadPdfContent(blob.downloadUrl);
+  } catch (error) {
+    console.error('PDF loading error:', error);
+    throw new Error('Failed to process PDF content');
   }
-
-  const docs = await loader.load();
 
   const textSplitter = new RecursiveCharacterTextSplitter({
     chunkSize: 800,
@@ -277,7 +287,6 @@ async function processDocument(file, fileId) {
     modelName: "text-embedding-3-small"
   });
 
-  // Prepare vectors
   return await Promise.all(chunks.map(async (chunk, i) => ({
     id: `${fileId}-${i}`,
     values: await embeddings.embedQuery(chunk.pageContent),
