@@ -189,200 +189,140 @@ import { NextResponse } from "next/server";
 import { put } from '@vercel/blob';
 import { v4 as uuidv4 } from 'uuid';
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
-import { DocxLoader } from "@langchain/community/document_loaders/fs/docx";
-import { TextLoader } from "langchain/document_loaders/fs/text";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { OpenAIEmbeddings } from "@langchain/openai";
 import { Pinecone } from "@pinecone-database/pinecone";
 import fs from 'fs/promises';
 import path from 'path';
+import { createHash } from 'crypto';
 
-// Helper to clean metadata for Pinecone compatibility
-const cleanMetadata = (originalMetadata) => {
-  const cleaned = {};
-  const metadata = originalMetadata || {};
-  
-  for (const [key, value] of Object.entries(metadata)) {
-    if (value === null || value === undefined) continue;
-    
-    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-      cleaned[key] = value;
-    } 
-    else if (Array.isArray(value) && value.every(item => typeof item === 'string')) {
-      cleaned[key] = value;
-    }
-    else if (typeof value === 'object') {
-      try {
-        cleaned[key] = JSON.stringify(value);
-      } catch (e) {
-        console.warn(`Could not stringify metadata field ${key}`, value);
-      }
-    }
-    else {
-      cleaned[key] = String(value);
-    }
-  }
-  
-  return cleaned;
-};
+// Initialize Pinecone client
+const pinecone = new Pinecone({ 
+  apiKey: process.env.PINECONE_API_KEY 
+});
 
-// Handle file storage based on environment
 async function storeFile(fileName, file) {
-  if (process.env.VERCEL_ENV === 'production') {
-    // Production: Use Vercel Blob with token
-    return await put(fileName, file, {
-      access: 'public',
-      token: process.env.BLOB_READ_WRITE_TOKEN
-    });
-  } else {
-    // Local development: Save to filesystem
+  // Use local storage if Blob isn't configured
+  if (!process.env.BLOB_READ_WRITE_TOKEN || process.env.NODE_ENV === 'development') {
     const uploadsDir = path.join(process.cwd(), 'uploads');
     await fs.mkdir(uploadsDir, { recursive: true });
     const filePath = path.join(uploadsDir, fileName);
     await fs.writeFile(filePath, Buffer.from(await file.arrayBuffer()));
-    return { url: `file://${filePath}` };
+    return { 
+      url: path.join(uploadsDir, fileName) // Return direct filesystem path
+    };
+  }
+
+  // Use Vercel Blob in production
+  try {
+    return await put(fileName, file, {
+      access: 'public',
+      token: process.env.BLOB_READ_WRITE_TOKEN
+    });
+  } catch (error) {
+    console.error('Blob upload failed:', error);
+    throw new Error('File storage service unavailable');
   }
 }
 
-// Get file data in appropriate format
-async function getFileData(file, fileUrl) {
-  if (process.env.VERCEL_ENV === 'production') {
-    const response = await fetch(fileUrl);
-    if (!response.ok) throw new Error(`Failed to download file: ${response.status}`);
-    return await response.blob();
+async function processDocument(file, fileId) {
+  const fileHash = createHash('sha256')
+    .update(await file.text())
+    .digest('hex');
+
+  const index = pinecone.Index(process.env.PINECONE_INDEX);
+
+  // Delete existing versions using proper Pinecone syntax
+  try {
+    const existing = await index.query({
+      vector: Array(1536).fill(0),
+      filter: { fileHash: { $eq: fileHash } },
+      topK: 10000,
+      includeMetadata: true
+    });
+    
+    if (existing.matches?.length) {
+      // Proper deletion syntax for Pinecone
+      await index.deleteMany(existing.matches.map(v => v.id));
+    }
+  } catch (error) {
+    console.error('Deletion error:', error);
   }
-  return new Blob([Buffer.from(await file.arrayBuffer())], { type: file.type });
+
+  // Store file
+  const blob = await storeFile(`${fileId}.pdf`, file);
+
+  // Process document with proper file path handling
+  let loader;
+  if (process.env.NODE_ENV === 'production') {
+    loader = new PDFLoader(blob.url);
+  } else {
+    // Remove file:// prefix for local development
+    const filePath = blob.url.startsWith('file://') 
+      ? blob.url.slice(7) 
+      : blob.url;
+    loader = new PDFLoader(filePath);
+  }
+
+  const docs = await loader.load();
+
+  const textSplitter = new RecursiveCharacterTextSplitter({
+    chunkSize: 800,
+    chunkOverlap: 100
+  });
+
+  const chunks = await textSplitter.splitDocuments(docs);
+  const embeddings = new OpenAIEmbeddings({
+    openAIApiKey: process.env.OPENAI_API_KEY,
+    modelName: "text-embedding-3-small"
+  });
+
+  // Prepare vectors
+  return await Promise.all(chunks.map(async (chunk, i) => ({
+    id: `${fileId}-${i}`,
+    values: await embeddings.embedQuery(chunk.pageContent),
+    metadata: {
+      fileId,
+      fileHash,
+      fileName: file.name,
+      text: chunk.pageContent,
+      pageNumber: chunk.metadata?.loc?.pageNumber || 1,
+      createdAt: new Date().toISOString()
+    }
+  })));
 }
 
 export async function POST(request) {
   try {
-    // 1. Handle file upload
     const formData = await request.formData();
     const file = formData.get('file');
-
-    if (!file) {
-      return NextResponse.json({ error: 'No files received.' }, { status: 400 });
-    }
-
-    // 2. Validate file type
-    const validTypes = [
-      'application/pdf',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'text/plain'
-    ];
     
-    if (!validTypes.includes(file.type)) {
+    if (!file || file.type !== 'application/pdf') {
       return NextResponse.json(
-        { error: 'Invalid file type. Only PDF, DOCX, and TXT files are allowed.' },
+        { error: 'Only PDF files are supported' }, 
         { status: 400 }
       );
     }
 
-    // 3. Store file (Blob or local)
     const fileId = uuidv4();
-    const fileExtension = file.name.split('.').pop();
-    const fileName = `${fileId}.${fileExtension}`;
+    const vectors = await processDocument(file, fileId);
     
-    const blob = await storeFile(fileName, file);
-    const fileUrl = blob.url;
-
-    // 4. Get file data in appropriate format
-    const fileData = await getFileData(file, fileUrl);
-
-    // 5. Load document content
-    let loader;
-    try {
-      if (file.type === 'application/pdf') {
-        loader = new PDFLoader(fileData);
-      } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-        loader = new DocxLoader(fileData);
-      } else {
-        loader = new TextLoader(fileData);
-      }
-    } catch (loaderError) {
-      console.error('Loader error:', loaderError);
-      return NextResponse.json(
-        { error: 'Failed to load document content' },
-        { status: 500 }
-      );
-    }
-
-    const rawDocs = await loader.load();
-
-    // 6. Split documents into chunks
-    const textSplitter = new RecursiveCharacterTextSplitter({
-      chunkSize: 1000,
-      chunkOverlap: 200,
-    });
-    
-    const docs = await textSplitter.splitDocuments(rawDocs);
-
-    // 7. Prepare metadata with Pinecone-compatible values
-    const processedDocs = docs.map(doc => {
-      const pageNumber = doc.metadata?.loc?.pageNumber || 
-                        (doc.metadata?.loc ? 1 : undefined);
-      
-      return {
-        pageContent: doc.pageContent,
-        metadata: {
-          ...cleanMetadata(doc.metadata),
-          fileId,
-          fileName: file.name,
-          text: doc.pageContent,
-          chunkId: uuidv4(),
-          createdAt: new Date().toISOString(),
-          fileUrl,
-          ...(pageNumber && { pageNumber })
-        }
-      };
-    });
-
-    // 8. Initialize Pinecone
-    const pinecone = new Pinecone({
-      apiKey: process.env.PINECONE_API_KEY,
-    });
+    // Batch upsert
     const index = pinecone.Index(process.env.PINECONE_INDEX);
-
-    // 9. Create embeddings
-    const embeddings = new OpenAIEmbeddings({
-      openAIApiKey: process.env.OPENAI_API_KEY,
-      modelName: "text-embedding-3-small"
-    });
-
-    // 10. Prepare vectors with cleaned metadata
-    const vectors = await Promise.all(
-      processedDocs.map(async (doc) => {
-        const embedding = await embeddings.embedQuery(doc.pageContent);
-        return {
-          id: doc.metadata.chunkId,
-          values: embedding,
-          metadata: cleanMetadata(doc.metadata)
-        };
-      })
-    );
-
-    // 11. Upsert to Pinecone
-    try {
-      await index.upsert(vectors);
-      
-      return NextResponse.json({ 
-        success: true, 
-        fileId,
-        fileName: file.name,
-        fileSize: file.size,
-        fileType: file.type,
-        fileUrl,
-        totalChunks: vectors.length
-      });
-    } catch (upsertError) {
-      console.error('Pinecone upsert error:', upsertError);
-      throw new Error(`Failed to store document in vector database: ${upsertError.message}`);
+    for (let i = 0; i < vectors.length; i += 50) {
+      await index.upsert(vectors.slice(i, i + 50));
     }
+
+    return NextResponse.json({ 
+      success: true,
+      chunks: vectors.length,
+      fileId
+    });
 
   } catch (error) {
-    console.error('Document processing error:', error);
+    console.error('Upload failed:', error);
     return NextResponse.json(
-      { error: error.message || 'An error occurred while processing the document' },
+      { error: error.message.includes('timeout') ? 'Processing timeout' : 'Upload failed' },
       { status: 500 }
     );
   }
