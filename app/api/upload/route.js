@@ -183,8 +183,10 @@
 //   }
 // }
 
+
 // app/api/upload/route.js
 import { NextResponse } from "next/server";
+import { put } from '@vercel/blob';
 import { v4 as uuidv4 } from 'uuid';
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 import { DocxLoader } from "@langchain/community/document_loaders/fs/docx";
@@ -224,40 +226,37 @@ const cleanMetadata = (originalMetadata) => {
   return cleaned;
 };
 
-// Local file storage simulation
-const localBlobStorage = async (fileName, file, options) => {
-  const uploadsDir = path.join(process.cwd(), 'uploads');
-  try {
-    await fs.mkdir(uploadsDir, { recursive: true });
-  } catch (err) {
-    if (err.code !== 'EEXIST') throw err;
-  }
-
-  const filePath = path.join(uploadsDir, fileName);
-  const buffer = Buffer.from(await file.arrayBuffer());
-  await fs.writeFile(filePath, buffer);
-  
-  return { 
-    url: `file://${filePath}`,
-    pathname: fileName,
-    downloadUrl: `file://${filePath}`
-  };
-};
-
-// Determine storage method based on environment
-const getStorageHandler = async () => {
+// Handle file storage based on environment
+async function storeFile(fileName, file) {
   if (process.env.VERCEL_ENV === 'production') {
-    const { put } = await import('@vercel/blob');
-    return (fileName, file, options) => put(fileName, file, {
-      ...options,
+    // Production: Use Vercel Blob with token
+    return await put(fileName, file, {
+      access: 'public',
       token: process.env.BLOB_READ_WRITE_TOKEN
     });
+  } else {
+    // Local development: Save to filesystem
+    const uploadsDir = path.join(process.cwd(), 'uploads');
+    await fs.mkdir(uploadsDir, { recursive: true });
+    const filePath = path.join(uploadsDir, fileName);
+    await fs.writeFile(filePath, Buffer.from(await file.arrayBuffer()));
+    return { url: `file://${filePath}` };
   }
-  return localBlobStorage;
-};
+}
+
+// Get file data in appropriate format
+async function getFileData(file, fileUrl) {
+  if (process.env.VERCEL_ENV === 'production') {
+    const response = await fetch(fileUrl);
+    if (!response.ok) throw new Error(`Failed to download file: ${response.status}`);
+    return await response.blob();
+  }
+  return new Blob([Buffer.from(await file.arrayBuffer())], { type: file.type });
+}
 
 export async function POST(request) {
   try {
+    // 1. Handle file upload
     const formData = await request.formData();
     const file = formData.get('file');
 
@@ -265,7 +264,7 @@ export async function POST(request) {
       return NextResponse.json({ error: 'No files received.' }, { status: 400 });
     }
 
-    // Validate file type
+    // 2. Validate file type
     const validTypes = [
       'application/pdf',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -279,28 +278,26 @@ export async function POST(request) {
       );
     }
 
-    // Upload file to appropriate storage
-    const uploadFile = await getStorageHandler();
+    // 3. Store file (Blob or local)
     const fileId = uuidv4();
     const fileExtension = file.name.split('.').pop();
     const fileName = `${fileId}.${fileExtension}`;
     
-    const blob = await uploadFile(fileName, file, { access: 'public' });
+    const blob = await storeFile(fileName, file);
     const fileUrl = blob.url;
 
-    // Load document content
-    let loader;
-    const filePath = process.env.VERCEL_ENV === 'production' 
-      ? fileUrl 
-      : fileUrl.replace('file://', '');
+    // 4. Get file data in appropriate format
+    const fileData = await getFileData(file, fileUrl);
 
+    // 5. Load document content
+    let loader;
     try {
       if (file.type === 'application/pdf') {
-        loader = new PDFLoader(filePath);
+        loader = new PDFLoader(fileData);
       } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-        loader = new DocxLoader(filePath);
+        loader = new DocxLoader(fileData);
       } else {
-        loader = new TextLoader(filePath);
+        loader = new TextLoader(fileData);
       }
     } catch (loaderError) {
       console.error('Loader error:', loaderError);
@@ -310,8 +307,9 @@ export async function POST(request) {
       );
     }
 
-    // Process document
     const rawDocs = await loader.load();
+
+    // 6. Split documents into chunks
     const textSplitter = new RecursiveCharacterTextSplitter({
       chunkSize: 1000,
       chunkOverlap: 200,
@@ -319,7 +317,7 @@ export async function POST(request) {
     
     const docs = await textSplitter.splitDocuments(rawDocs);
 
-    // Prepare metadata
+    // 7. Prepare metadata with Pinecone-compatible values
     const processedDocs = docs.map(doc => {
       const pageNumber = doc.metadata?.loc?.pageNumber || 
                         (doc.metadata?.loc ? 1 : undefined);
@@ -339,19 +337,19 @@ export async function POST(request) {
       };
     });
 
-    // Initialize Pinecone
+    // 8. Initialize Pinecone
     const pinecone = new Pinecone({
       apiKey: process.env.PINECONE_API_KEY,
     });
     const index = pinecone.Index(process.env.PINECONE_INDEX);
 
-    // Create embeddings
+    // 9. Create embeddings
     const embeddings = new OpenAIEmbeddings({
       openAIApiKey: process.env.OPENAI_API_KEY,
       modelName: "text-embedding-3-small"
     });
 
-    // Prepare vectors
+    // 10. Prepare vectors with cleaned metadata
     const vectors = await Promise.all(
       processedDocs.map(async (doc) => {
         const embedding = await embeddings.embedQuery(doc.pageContent);
@@ -363,7 +361,7 @@ export async function POST(request) {
       })
     );
 
-    // Upsert to Pinecone
+    // 11. Upsert to Pinecone
     try {
       await index.upsert(vectors);
       

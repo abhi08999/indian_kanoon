@@ -31,7 +31,7 @@ export default function DocumentMessage({ message, darkMode, isLoading }) {
         {message.role === 'assistant' && !isLoading && (
           <CopyToClipboard text={message.content} onCopy={handleCopy}>
             <button
-              className={`absolute -top-3 -right-3 p-2 rounded-full ${darkMode 
+              className={`cursor-pointer absolute -top-3 -right-3 p-2 rounded-full ${darkMode 
                 ? 'bg-gray-700 hover:bg-gray-600' 
                 : 'bg-gray-200 hover:bg-gray-300'
               } transition-all`}
