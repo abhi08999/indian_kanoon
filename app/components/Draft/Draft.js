@@ -24,15 +24,22 @@ export default function Draft() {
     }
   }, [draft, userQuery]);
 
-  const handleSubmit = async (e) => {
+// In your Draft.js component
+const handleSubmit = async (e) => {
     e.preventDefault();
     if (!input.trim()) return;
-
+  
     setIsLoading(true);
     setUserQuery(input);
     setInput('');
     setDraft(null);
-
+  
+    // Add timeout
+    const timeoutId = setTimeout(() => {
+      setIsLoading(false);
+      alert('The request is taking longer than usual. Please try again.');
+    }, 9000); // 9 seconds for free tier
+  
     try {
       const response = await fetch('/api/draft', {
         method: 'POST',
@@ -41,9 +48,10 @@ export default function Draft() {
         },
         body: JSON.stringify({ prompt: input }),
       });
-
+  
+      clearTimeout(timeoutId);
+      
       if (!response.ok) throw new Error('Failed to generate draft');
-
       const data = await response.json();
       setDraft(data.draft);
     } catch (error) {
