@@ -2,7 +2,7 @@
 'use client';
 
 import { useRef, useEffect, useState } from 'react';
-import { useDarkMode } from '@/hooks/useDarkMode';
+import { useDarkMode } from '../../../hooks/useDarkMode';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FiCopy, FiDownload, FiLoader, FiEdit2 } from 'react-icons/fi';
 import Markdown from 'react-markdown';
@@ -24,8 +24,7 @@ export default function Draft() {
     }
   }, [draft, userQuery]);
 
-// In your Draft.js component
-const handleSubmit = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!input.trim()) return;
   
@@ -34,11 +33,10 @@ const handleSubmit = async (e) => {
     setInput('');
     setDraft(null);
   
-    // Add timeout
     const timeoutId = setTimeout(() => {
       setIsLoading(false);
       alert('The request is taking longer than usual. Please try again.');
-    }, 9000); // 9 seconds for free tier
+    }, 9000);
   
     try {
       const response = await fetch('/api/draft', {
@@ -64,12 +62,10 @@ const handleSubmit = async (e) => {
   const downloadDraft = () => {
     if (!draft) return;
     
-    // Get the visible content including formatting
     const draftContainer = document.createElement('div');
     draftContainer.style.fontFamily = '"Calibri", sans-serif';
     draftContainer.style.lineHeight = '1.5';
     
-    // Add the title
     const title = document.createElement('h1');
     title.textContent = 'DRAFT';
     title.style.fontSize = '1.75rem';
@@ -80,7 +76,6 @@ const handleSubmit = async (e) => {
     title.style.textAlign = 'center';
     draftContainer.appendChild(title);
     
-    // Add the underline
     const underline = document.createElement('div');
     underline.style.width = '5rem';
     underline.style.height = '2px';
@@ -88,18 +83,16 @@ const handleSubmit = async (e) => {
     underline.style.margin = '0 auto 2.5rem';
     draftContainer.appendChild(underline);
     
-    // Add the content (convert markdown to plain text with basic formatting)
     const content = document.createElement('div');
     content.innerHTML = draft
-      .replace(/^### (.*$)/gm, '\n$1\n') // h3
-      .replace(/^## (.*$)/gm, '\n$1\n')  // h2
-      .replace(/^# (.*$)/gm, '\n$1\n')   // h1
-      .replace(/\*\*(.*?)\*\*/g, '$1')   // bold
-      .replace(/\*(.*?)\*/g, '$1')       // italic
-      .replace(/`(.*?)`/g, '$1');        // code
+      .replace(/^### (.*$)/gm, '\n$1\n')
+      .replace(/^## (.*$)/gm, '\n$1\n')
+      .replace(/^# (.*$)/gm, '\n$1\n')
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/\*(.*?)\*/g, '$1')
+      .replace(/`(.*?)`/g, '$1');
     draftContainer.appendChild(content);
     
-    // Add signature block
     const signature = document.createElement('div');
     signature.style.marginTop = '3rem';
     signature.style.textAlign = 'right';
@@ -111,7 +104,6 @@ const handleSubmit = async (e) => {
     `;
     draftContainer.appendChild(signature);
     
-    // Create and trigger download
     const element = document.createElement('a');
     const file = new Blob([draftContainer.innerText], { type: 'text/plain' });
     element.href = URL.createObjectURL(file);
@@ -122,48 +114,18 @@ const handleSubmit = async (e) => {
   };
 
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      height: '100%',
-      backgroundColor: darkMode ? '#111827' : '#f9fafb',
-      fontFamily: '"Calibri", "Candara", "Segoe", "Segoe UI", sans-serif'
-    }}>
-      <div style={{
-        flex: 1,
-        overflowY: 'auto',
-        padding: '1.5rem',
-        paddingTop: '7rem' // Adjusted for header height
-      }}>
-        <div style={{
-          maxWidth: '48rem',
-          margin: '0 auto',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '2rem'
-        }}>
+    <div className={`flex flex-col h-full w-full ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+      <div className="flex-1 overflow-y-auto px-6 py-4">
+        <div className="max-w-3xl mx-auto space-y-6 pb-24">
           {userQuery && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3 }}
-              style={{
-                display: 'flex',
-                justifyContent: 'flex-end'
-              }}
+              className="flex justify-end"
             >
-              <div style={{
-                position: 'relative',
-                maxWidth: '90%',
-                borderRadius: '0.75rem',
-                backgroundColor: darkMode ? '#4f46e5' : '#4f46e5',
-                borderTopRightRadius: 0,
-                padding: '1.25rem 1.5rem'
-              }}>
-                <p style={{
-                  fontSize: '0.875rem',
-                  color: '#ffffff'
-                }}>
+              <div className={`rounded-lg ${darkMode ? 'bg-indigo-600' : 'bg-indigo-600'} p-5 max-w-[90%]`}>
+                <p className="text-sm text-white">
                   {userQuery}
                 </p>
               </div>
@@ -175,26 +137,10 @@ const handleSubmit = async (e) => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.3 }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '1.5rem',
-                borderRadius: '0.75rem',
-                backgroundColor: darkMode ? '#1f2937' : '#ffffff',
-                boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-                border: `1px solid ${darkMode ? '#374151' : '#e5e7eb'}`,
-              }}
+              className={`flex items-center justify-center p-6 rounded-lg ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border shadow-sm`}
             >
-              <FiLoader style={{
-                animation: 'spin 1s linear infinite',
-                marginRight: '0.75rem',
-                fontSize: '1.125rem'
-              }} />
-              <span style={{
-                fontSize: '0.875rem',
-                color: darkMode ? '#9ca3af' : '#4b5563'
-              }}>
+              <FiLoader className="animate-spin mr-3 text-lg" />
+              <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                 Generating draft...
               </span>
             </motion.div>
@@ -212,13 +158,15 @@ const handleSubmit = async (e) => {
         </div>
       </div>
 
-      <DraftInput
-        input={input}
-        setInput={setInput}
-        isLoading={isLoading}
-        darkMode={darkMode}
-        handleSubmit={handleSubmit}
-      />
+      <div className="sticky bottom-0 w-full">
+        <DraftInput
+          input={input}
+          setInput={setInput}
+          isLoading={isLoading}
+          darkMode={darkMode}
+          handleSubmit={handleSubmit}
+        />
+      </div>
     </div>
   );
 }
@@ -231,7 +179,6 @@ function LegalDraftDocument({ content, darkMode, onDownload }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Helper function to filter out non-DOM props
   const filterProps = (props) => {
     const { node, ordered, depth, ...rest } = props;
     return rest;
@@ -242,205 +189,75 @@ function LegalDraftDocument({ content, darkMode, onDownload }) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      style={{
-        display: 'flex',
-        justifyContent: 'flex-start'
-      }}
+      className="flex justify-start"
     >
-      <div style={{
-        position: 'relative',
-        width: '100%',
-        backgroundColor: darkMode ? '#1f2937' : '#ffffff',
-        border: `1px solid ${darkMode ? '#374151' : '#e5e7eb'}`,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-        padding: '2.5rem'
-      }}>
-        {/* Action buttons */}
-        <div style={{
-          position: 'absolute',
-          top: '1rem',
-          right: '1rem',
-          display: 'flex',
-          gap: '0.5rem'
-        }}>
+      <div className={`relative w-full p-10 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border shadow-sm`}>
+        <div className="absolute top-4 right-4 flex gap-2">
           <CopyToClipboard text={content} onCopy={handleCopy}>
-            <button style={{
-              cursor: 'pointer',
-              padding: '0.5rem',
-              borderRadius: '50%',
-              backgroundColor: darkMode ? '#374151' : '#f3f4f6',
-              border: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }} title="Copy to clipboard">
-              <FiCopy style={{
-                height: '1rem',
-                width: '1rem',
-                color: darkMode ? '#d1d5db' : '#4b5563'
-              }} />
+            <button className={`p-2 rounded-full ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'}`} title="Copy to clipboard">
+              <FiCopy className={`w-4 h-4 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`} />
             </button>
           </CopyToClipboard>
 
           <button
             onClick={onDownload}
-            style={{
-              cursor: 'pointer',
-              padding: '0.5rem',
-              borderRadius: '50%',
-              backgroundColor: darkMode ? '#374151' : '#f3f4f6',
-              border: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
+            className={`p-2 rounded-full ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'}`}
             title="Download draft"
           >
-            <FiDownload style={{
-              height: '1rem',
-              width: '1rem',
-              color: darkMode ? '#d1d5db' : '#4b5563'
-            }} />
+            <FiDownload className={`w-4 h-4 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`} />
           </button>
         </div>
 
-        {/* Draft Content */}
-        <div style={{
-          fontFamily: '"Calibri", sans-serif',
-          color: darkMode ? '#f3f4f6' : '#111827',
-          lineHeight: '1.5'
-        }}>
-          <div style={{
-            textAlign: 'center',
-            marginBottom: '2.5rem'
-          }}>
-            <h1 style={{
-              fontSize: '1.75rem',
-              fontWeight: 'bold',
-              textTransform: 'uppercase',
-              letterSpacing: '1px',
-              marginBottom: '0.5rem'
-            }}>DRAFT</h1>
-            <div style={{
-              width: '5rem',
-              height: '2px',
-              backgroundColor: '#4f46e5',
-              margin: '0 auto'
-            }}></div>
+        <div className={`${darkMode ? 'text-gray-100' : 'text-gray-900'} leading-relaxed`}>
+          <div className="text-center mb-10">
+            <h1 className="text-2xl font-bold uppercase tracking-wider mb-2">DRAFT</h1>
+            <div className="w-20 h-0.5 bg-indigo-500 mx-auto"></div>
           </div>
           
           <Markdown
             remarkPlugins={[remarkGfm]}
             components={{
               p: ({node, ...props}) => (
-                <p style={{
-                  marginBottom: '1rem',
-                  textAlign: 'justify',
-                  fontSize: '1.0625rem'
-                }} {...filterProps(props)} />
+                <p className="mb-4 text-justify text-[1.0625rem]" {...filterProps(props)} />
               ),
               strong: ({node, ...props}) => (
-                <strong style={{
-                  fontWeight: '600',
-                  fontSize: '1.0625rem'
-                }} {...filterProps(props)} />
+                <strong className="font-semibold text-[1.0625rem]" {...filterProps(props)} />
               ),
               em: ({node, ...props}) => (
-                <em style={{
-                  fontStyle: 'italic',
-                  fontSize: '1.0625rem'
-                }} {...filterProps(props)} />
+                <em className="italic text-[1.0625rem]" {...filterProps(props)} />
               ),
               h1: ({node, ...props}) => (
-                <h1 style={{
-                  fontSize: '1.5rem',
-                  fontWeight: '600',
-                  margin: '1.5rem 0 1rem',
-                  textTransform: 'uppercase'
-                }} {...filterProps(props)} />
+                <h1 className="text-xl font-semibold my-6 uppercase" {...filterProps(props)} />
               ),
               h2: ({node, ...props}) => (
-                <h2 style={{
-                  fontSize: '1.25rem',
-                  fontWeight: '600',
-                  margin: '1.25rem 0 0.75rem',
-                  borderBottom: `1px solid ${darkMode ? '#4b5563' : '#d1d5db'}`,
-                  paddingBottom: '0.25rem'
-                }} {...filterProps(props)} />
+                <h2 className="text-lg font-semibold my-5 border-b pb-1" {...filterProps(props)} />
               ),
               h3: ({node, ...props}) => (
-                <h3 style={{
-                  fontSize: '1.125rem',
-                  fontWeight: '600',
-                  margin: '1rem 0 0.5rem'
-                }} {...filterProps(props)} />
+                <h3 className="text-base font-semibold my-4" {...filterProps(props)} />
               ),
               ul: ({node, depth, ordered, ...props}) => (
-                <ul style={{
-                  listStyleType: 'disc',
-                  paddingLeft: '1.5rem',
-                  margin: '0.75rem 0 1.25rem',
-                  fontSize: '1.0625rem'
-                }} {...filterProps(props)} />
+                <ul className="list-disc pl-6 my-3 text-[1.0625rem]" {...filterProps(props)} />
               ),
               ol: ({node, depth, ordered, ...props}) => (
-                <ol style={{
-                  listStyleType: 'decimal',
-                  paddingLeft: '1.5rem',
-                  margin: '0.75rem 0 1.25rem',
-                  fontSize: '1.0625rem'
-                }} {...filterProps(props)} />
+                <ol className="list-decimal pl-6 my-3 text-[1.0625rem]" {...filterProps(props)} />
               ),
               li: ({node, ordered, ...props}) => (
-                <li style={{
-                  marginBottom: '0.25rem',
-                  fontSize: '1.0625rem'
-                }} {...filterProps(props)} />
+                <li className="mb-1 text-[1.0625rem]" {...filterProps(props)} />
               ),
               blockquote: ({node, ...props}) => (
-                <blockquote style={{
-                  borderLeft: `3px solid ${darkMode ? '#818cf8' : '#4f46e5'}`,
-                  paddingLeft: '1rem',
-                  margin: '1rem 0',
-                  fontStyle: 'italic',
-                  backgroundColor: darkMode ? 'rgba(55, 65, 81, 0.3)' : 'rgba(79, 70, 229, 0.1)',
-                  padding: '0.5rem 1rem',
-                  fontSize: '1.0625rem'
-                }} {...filterProps(props)} />
+                <blockquote className={`border-l-4 ${darkMode ? 'border-indigo-400 bg-gray-700' : 'border-indigo-500 bg-indigo-50'} pl-4 my-4 italic py-2 text-[1.0625rem]`} {...filterProps(props)} />
               ),
             }}
           >
             {content}
           </Markdown>
 
-          {/* Signature Block */}
-          <div style={{
-            marginTop: '3rem',
-            display: 'flex',
-            justifyContent: 'flex-end'
-          }}>
-            <div style={{
-              textAlign: 'right',
-              width: '50%'
-            }}>
-              <p style={{ 
-                marginBottom: '2rem',
-                fontSize: '1.0625rem'
-              }}>Sincerely,</p>
-              <div style={{
-                height: '1px',
-                width: '100%',
-                backgroundColor: darkMode ? '#4b5563' : '#d1d5db',
-                marginBottom: '0.5rem'
-              }}></div>
-              <p style={{ 
-                fontWeight: '600',
-                fontSize: '1.0625rem'
-              }}>[Your Name]</p>
-              <p style={{ 
-                fontSize: '1rem',
-                color: darkMode ? '#9ca3af' : '#6b7280'
-              }}>[Your Designation]</p>
+          <div className="mt-12 flex justify-end">
+            <div className="text-right w-1/2">
+              <p className="mb-8 text-[1.0625rem]">Sincerely,</p>
+              <div className={`h-px w-full ${darkMode ? 'bg-gray-600' : 'bg-gray-300'} mb-2`}></div>
+              <p className="font-semibold text-[1.0625rem]">[Your Name]</p>
+              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>[Your Designation]</p>
             </div>
           </div>
         </div>

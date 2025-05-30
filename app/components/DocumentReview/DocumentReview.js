@@ -1,10 +1,9 @@
 // app/components/DocumentReview/DocumentReview.js
-
 'use client';
 
 import { useRef, useEffect, useState } from 'react';
-import { useDarkMode } from '@/hooks/useDarkMode';
-import { useDocReview } from '@/hooks/useDocReview';
+import { useDarkMode } from '../../../hooks/useDarkMode';
+import { useDocReview } from '../../../hooks/useDocReview';
 import DocumentMessage from './DocumentMessage';
 import DocumentChatInput from './DocumentChatInput';
 import { FiFile, FiX, FiUpload } from 'react-icons/fi';
@@ -37,9 +36,9 @@ export default function DocumentReview() {
   }, [messages, uploadedFile]);
 
   return (
-    <div className={`flex flex-col h-full ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+    <div className={`flex flex-col h-full w-full ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
       {/* Top Bar */}
-      <div className={`border-b ${darkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'}`}>
+      <div className={`sticky top-0 z-10 border-b ${darkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'}`}>
         {uploadedFile ? (
           <div className="px-6 py-3 flex items-center justify-between">
             <div className="flex items-center">
@@ -77,7 +76,7 @@ export default function DocumentReview() {
 
       {/* Main Content */}
       <div className="flex-1 overflow-y-auto px-6 py-4">
-        <div className="max-w-3xl mx-auto space-y-6">
+        <div className="max-w-3xl mx-auto space-y-6 pb-32">
           {messages.map((msg, index) => (
             <DocumentMessage 
               key={`msg-${index}`}
@@ -91,17 +90,19 @@ export default function DocumentReview() {
       </div>
 
       {/* Chat Input */}
-      <DocumentChatInput
-        input={input}
-        setInput={setInput}
-        isLoading={isLoading}
-        isUploading={isUploading}
-        darkMode={darkMode}
-        handleSubmit={handleSubmit}
-        handleFileUpload={handleFileUpload}
-        textareaRef={useRef(null)}
-        uploadedFile={uploadedFile}
-      />
+      <div className="sticky bottom-0 w-full">
+        <DocumentChatInput
+          input={input}
+          setInput={setInput}
+          isLoading={isLoading}
+          isUploading={isUploading}
+          darkMode={darkMode}
+          handleSubmit={handleSubmit}
+          handleFileUpload={handleFileUpload}
+          textareaRef={useRef(null)}
+          uploadedFile={uploadedFile}
+        />
+      </div>
     </div>
   );
 }

@@ -1,8 +1,8 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { useDarkMode } from '@/hooks/useDarkMode';
-import { useJudgmentSearch } from '@/hooks/useJudgmentSearch';
+import { useDarkMode } from '../../../hooks/useDarkMode';
+import { useJudgmentSearch } from '../../../hooks/useJudgmentSearch';
 import JudgmentCard from './JudgmentCard';
 import JudgmentDetailsModal from './JudgmentDetailsModal';
 import AnalyzingPopup from './AnalyzingPopup'
