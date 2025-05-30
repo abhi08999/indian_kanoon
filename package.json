@@ -24,7 +24,7 @@
     "html2canvas": "^1.4.1",
     "jspdf": "^3.0.1",
     "langchain": "^0.3.23",
-    "next": "^15.3.2",
+    "next": "^15.3.3",
     "openai": "^4.92.1",
     "pdf-parse": "^1.1.1",
     "prism-react-renderer": "^2.4.1",
